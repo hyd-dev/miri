@@ -54,6 +54,8 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
     ) -> Compilation {
         compiler.session().abort_if_errors();
 
+        let mut return_code = None;
+
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
             init_late_loggers(tcx);
             let (entry_def_id, _) = if let Some((entry_def, x)) = tcx.entry_fn(()) {
@@ -77,14 +79,14 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                 env::set_current_dir(cwd).unwrap();
             }
 
-            if let Some(return_code) = miri::eval_main(tcx, entry_def_id, config) {
-                std::process::exit(
-                    i32::try_from(return_code).expect("Return value was too large!"),
-                );
-            }
+            return_code = miri::eval_main(tcx, entry_def_id, config);
         });
 
         compiler.session().abort_if_errors();
+
+        if let Some(return_code) = return_code {
+            std::process::exit(i32::try_from(return_code).expect("Return value was too large!"));
+        }
 
         Compilation::Stop
     }
